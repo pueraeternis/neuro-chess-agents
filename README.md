@@ -2,8 +2,7 @@
 
 > **A Neuro-Symbolic approach to chess engines using LLM Orchestration, LangGraph, and Local Inference.**
 
-![App Screenshot](https://via.placeholder.com/800x400?text=Neuro-Chess+Interface+Screenshot) 
-*(Replace this link with a real screenshot of your UI)*
+![Neuro-Chess Interface](data/screenshot.png)
 
 ## 💡 Concept
 
