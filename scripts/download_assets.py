@@ -1,26 +1,29 @@
 import os
 import urllib.request
 
-# Официальный сайт - самый надежный источник
-BASE_URL = "https://chessboardjs.com/img/chesspieces/wikipedia/"
-PIECES = ["wP", "wN", "wB", "wR", "wQ", "wK", "bP", "bN", "bB", "bR", "bQ", "bK"]
-TARGET_DIR = "static/img/chesspieces/wikipedia"
+from src.config import (
+    ASSETS_BASE_URL,
+    ASSETS_PIECES,
+    ASSETS_TARGET_DIR,
+    ASSETS_USER_AGENT,
+)
 
-# Добавляем User-Agent, чтобы сайт не блокировал скрипт как бота
 opener = urllib.request.build_opener()
-opener.addheaders = [("User-agent", "Mozilla/5.0")]
+opener.addheaders = [("User-agent", ASSETS_USER_AGENT)]
 urllib.request.install_opener(opener)
 
 
 def download_assets():
-    if not os.path.exists(TARGET_DIR):
-        os.makedirs(TARGET_DIR)
-        print(f"Created directory: {TARGET_DIR}")
+    target_dir = str(ASSETS_TARGET_DIR)
 
-    print(f"Downloading chess pieces from {BASE_URL}...")
-    for piece in PIECES:
-        url = f"{BASE_URL}{piece}.png"
-        save_path = os.path.join(TARGET_DIR, f"{piece}.png")
+    if not os.path.exists(target_dir):
+        os.makedirs(target_dir)
+        print(f"Created directory: {target_dir}")
+
+    print(f"Downloading chess pieces from {ASSETS_BASE_URL}...")
+    for piece in ASSETS_PIECES:
+        url = f"{ASSETS_BASE_URL}{piece}.png"
+        save_path = os.path.join(target_dir, f"{piece}.png")
 
         try:
             urllib.request.urlretrieve(url, save_path)

@@ -9,43 +9,48 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 
-# Импортируем наш новый логгер
+from src.config import (
+    FALLBACK_COMMENTARY,
+    LLM_COMMENTATOR_TEMPERATURE,
+    LLM_DEFAULT_TEMPERATURE,
+    LLM_MAX_TOKENS,
+    LLM_STOP_TOKENS,
+    LLM_STRATEGIST_TEMPERATURE,
+    MAX_RETRIES,
+)
 from src.logger import logger
 
 load_dotenv()
 
-# --- 1. CONFIGURATION ---
 
-
-def get_llm(temperature: float = 0.7, max_tokens: int = 16384) -> ChatOpenAI:
+def get_llm(
+    temperature: float = LLM_DEFAULT_TEMPERATURE,
+    max_tokens: int = LLM_MAX_TOKENS,
+) -> ChatOpenAI:
     """
-    Фабрика для LLM клиента.
+    Factory for the LLM client.
     """
     return ChatOpenAI(
         base_url=os.getenv("LLM_BASE_URL"),
         api_key=os.getenv("LLM_API_KEY"),
         model=os.getenv("LLM_MODEL"),
         temperature=temperature,
-        stop=["<|im_end|>", "<|endoftext|>"],
-        # vLLM Triton route expects legacy "max_tokens"; pass via extra_body
-        # to avoid LangChain/OpenAI client rewriting to max_completion_tokens.
+        stop=LLM_STOP_TOKENS,
         extra_body={"max_tokens": max_tokens},
     )
 
 
-# Создаем два инстанса: один креативный (для болтовни), один строгий (для игры)
-llm_strategist = get_llm(temperature=0.6)  # Чуть строже
-llm_commentator = get_llm(temperature=0.8)  # Веселее
+llm_strategist = get_llm(temperature=LLM_STRATEGIST_TEMPERATURE)
+llm_commentator = get_llm(temperature=LLM_COMMENTATOR_TEMPERATURE)
 
 
-# --- 2. STATE DEFINITION ---
 class AgentState(TypedDict):
     fen: str
     legal_moves_uci: list[str]
     history_pgn: str
 
     # Internal
-    thought_process: str | None  # Мысли модели (CoT)
+    thought_process: str | None
     proposed_move: str | None
     error_message: str | None
     retry_count: int
@@ -55,14 +60,12 @@ class AgentState(TypedDict):
     commentary: str | None
 
 
-# --- 3. HELPER: JSON EXTRACTOR ---
 def extract_json(text: str):
     """
-    Вытаскивает JSON из текста, даже если модель написала вступление.
-    Ищет первую структуру {...}
+    Extract JSON from text, even if the model adds a preamble.
+    Looks for the first {...} block.
     """
     try:
-        # Пытаемся найти JSON блок (между фигурными скобками)
         match = re.search(r"\{.*\}", text, re.DOTALL)
         if match:
             json_str = match.group(0)
@@ -72,18 +75,14 @@ def extract_json(text: str):
         return None
 
 
-# --- 4. NODES ---
-
-
 def strategist_node(state: AgentState):
     """
-    Агент-Стратег с включенным Chain of Thought (CoT).
+    Strategist agent with Chain-of-Thought (CoT) enabled.
     """
     fen = state["fen"]
     error = state.get("error_message", "")
     retries = state["retry_count"]
 
-    # PROMPT ENGINEERING: CoT Enabled
     system_prompt = (
         "You are a professional Chess Engine."
         "\nTASK: Analyze the board state and choose the best move."
@@ -112,11 +111,8 @@ def strategist_node(state: AgentState):
         response = llm_strategist.invoke(messages)
         content = response.content.strip()
 
-        # 1. Логируем мысли (Всё что ДО json)
-        # Это самое ценное для отладки
         logger.info(f"🧠 STRATEGIST THOUGHTS:\n{content}")
 
-        # 2. Парсим JSON
         data = extract_json(content)
 
         if not data or "move" not in data:
@@ -132,7 +128,7 @@ def strategist_node(state: AgentState):
         return {
             "proposed_move": move,
             "retry_count": retries + 1,
-            "thought_process": content,  # Сохраняем мысли в стейт
+            "thought_process": content,
         }
 
     except Exception as e:
@@ -142,7 +138,7 @@ def strategist_node(state: AgentState):
 
 def arbiter_node(state: AgentState):
     """
-    Валидатор (Tool).
+    Validator node that checks legality of the move.
     """
     proposed = state["proposed_move"]
     legal_moves = state["legal_moves_uci"]
@@ -155,9 +151,9 @@ def arbiter_node(state: AgentState):
     if proposed in legal_moves:
         logger.info(f"✅ Arbiter approved: {proposed}")
         return {"final_move_uci": proposed, "error_message": None}
-    logger.warning(f"❌ Arbiter rejected: {proposed} (Not in legal moves)")
+    logger.warning(f"❌ Arbiter rejected: {proposed} (not in legal moves)")
     return {
-        "error_message": f"Move '{proposed}' is ILLEGAL. Legal moves are: {legal_moves[:10]}...",  # Подсказываем пару ходов
+        "error_message": f"Move '{proposed}' is ILLEGAL. Legal moves are: {legal_moves[:10]}...",
         "proposed_move": None,
     }
 
@@ -179,8 +175,6 @@ def commentator_node(state: AgentState):
     if retries > 1:
         prompt += f"\nNote: The AI struggled and failed {retries - 1} times before finding this move. Make fun of that."
 
-    # Даем комментатору кусочек мыслей стратега, чтобы он мог это прокомментировать!
-    # Ограничиваем длину, чтобы не забивать контекст
     if thoughts:
         prompt += f"\nAI's Internal Monologue snippet: {thoughts[:200]}..."
 
@@ -196,8 +190,6 @@ def commentator_node(state: AgentState):
         return {"commentary": "..."}
 
 
-# --- 5. GRAPH ---
-
 workflow = StateGraph(AgentState)
 workflow.add_node("strategist", strategist_node)
 workflow.add_node("arbiter", arbiter_node)
@@ -209,7 +201,7 @@ workflow.set_entry_point("strategist")
 def should_retry(state: AgentState):
     if state.get("final_move_uci"):
         return "commentator"
-    if state["retry_count"] > 10:
+    if state["retry_count"] > MAX_RETRIES:
         return "force_random"
     return "strategist"
 
@@ -229,7 +221,6 @@ workflow.add_edge("commentator", END)
 
 app_agent = workflow.compile()
 
-# --- PUBLIC API ---
 import random
 
 
@@ -257,6 +248,6 @@ def get_agent_move(board: chess.Board):
         logger.error("☠️ MAX RETRIES EXCEEDED. Falling back to random.")
         fallback_move = random.choice(list(board.legal_moves))
         move_uci = fallback_move.uci()
-        commentary = "I am confused. Random move go!"
+        commentary = FALLBACK_COMMENTARY
 
     return move_uci, commentary

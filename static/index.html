@@ -74,7 +74,6 @@
             color: #d9534f;
         }
 
-        /* --- STYLES FOR PROMOTION MODAL --- */
         #promotion-dialog {
             position: fixed;
             top: 0;
@@ -84,7 +83,6 @@
             background: rgba(0, 0, 0, 0.85);
             z-index: 1000;
             display: flex;
-            /* Hidden by default via JS */
             flex-direction: column;
             justify-content: center;
             align-items: center;
@@ -142,9 +140,8 @@
     <!-- PROMOTION DIALOG -->
     <div id="promotion-dialog">
         <div class="promotion-content">
-            <h3>Choose Promotion</h3>
+            <h3>Choose promotion piece</h3>
             <div class="promo-options">
-                <!-- Картинки подгрузятся скриптом -->
                 <img src="/static/img/chesspieces/wikipedia/wQ.png" data-piece="q" class="promo-piece" title="Queen">
                 <img src="/static/img/chesspieces/wikipedia/wR.png" data-piece="r" class="promo-piece" title="Rook">
                 <img src="/static/img/chesspieces/wikipedia/wB.png" data-piece="b" class="promo-piece" title="Bishop">
@@ -166,7 +163,6 @@
         var $log = $('#game-log');
 
         var pendingPromotionMove = null;
-        // Храним текущий FEN, чтобы понимать, изменилась ли позиция
         var currentFen = 'start';
 
         function log(msg, type = 'info') {
@@ -179,12 +175,10 @@
 
         function onDragStart(source, piece, position, orientation) {
             if (game.game_over()) return false;
-            // Разрешаем брать только фигуры своего цвета (сейчас захардкожено: игрок - белый)
             if (piece.search(/^b/) !== -1) return false;
         }
 
         function onDrop(source, target) {
-            // --- Smart Castling (Рокировка перетаскиванием на ладью) ---
             var piece = game.get(source);
             if (piece && piece.type === 'k') {
                 if (source === 'e1' && target === 'h1') target = 'g1';
@@ -192,26 +186,19 @@
                 if (source === 'e8' && target === 'h8') target = 'g8';
                 if (source === 'e8' && target === 'a8') target = 'c8';
             }
-            // -----------------------------------------------------------
-
-            // Проверка на превращение пешки
             var moves = game.moves({ verbose: true });
             var move = moves.find(m => m.from === source && m.to === target);
 
             if (!move) return 'snapback';
 
-            // Если это превращение
             if (move.flags.includes('p') || (game.get(source).type === 'p' && target[1] === '8')) {
                 pendingPromotionMove = { source: source, target: target };
                 $('#promotion-dialog').css('display', 'flex');
                 return 'snapback';
             }
 
-            // Обычный ход
             makeMove(source, target);
 
-            // ВАЖНО: Мы не возвращаем 'snapback' здесь, позволяя chessboard.js
-            // визуально завершить перетаскивание.
         }
 
         function makeMove(source, target, promotionPiece = null) {
@@ -224,10 +211,6 @@
             var move = game.move(moveCfg);
 
             if (move) {
-                // --- FIX: Убираем "двойной ход" ---
-                // Обновляем позицию визуальной доски МГНОВЕННО (false), без анимации.
-                // Это нужно, чтобы синхронизировать состояние (например, переместить ладью при рокировке),
-                // но не переигрывать анимацию твоей фигуры.
                 board.position(game.fen(), false);
 
                 currentFen = game.fen();
@@ -300,7 +283,6 @@
             onDragStart: onDragStart,
             onDrop: onDrop,
             pieceTheme: '/static/img/chesspieces/wikipedia/{piece}.png',
-            // Скорость анимации (можно подкрутить)
             moveSpeed: 'slow',
             snapbackSpeed: 500,
             snapSpeed: 100

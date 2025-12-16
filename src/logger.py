@@ -1,25 +1,22 @@
 import logging
 import sys
 
+from src.config import LOGGER_DATEFMT, LOGGER_FORMAT, LOGGER_LEVEL, LOGGER_NAME
 
-def setup_logger(name: str = "neuro_chess", level: int = logging.INFO):
+
+def setup_logger(name: str = LOGGER_NAME, level: int = LOGGER_LEVEL):
     """
-    Настраивает логгер с красивым форматированием.
+    Configure logger with formatted output.
     """
     logger = logging.getLogger(name)
     logger.setLevel(level)
 
-    # Если хендлеры уже есть (например, при релоаде uvicorn), не добавляем новые
     if logger.handlers:
         return logger
 
     handler = logging.StreamHandler(sys.stdout)
 
-    # Формат: [TIME] [LEVEL] [LOGGER_NAME] Message
-    formatter = logging.Formatter(
-        fmt="%(asctime)s | %(levelname)-8s | %(name)-15s | %(message)s",
-        datefmt="%H:%M:%S",
-    )
+    formatter = logging.Formatter(fmt=LOGGER_FORMAT, datefmt=LOGGER_DATEFMT)
 
     handler.setFormatter(formatter)
     logger.addHandler(handler)
@@ -27,5 +24,4 @@ def setup_logger(name: str = "neuro_chess", level: int = logging.INFO):
     return logger
 
 
-# Создаем глобальный инстанс для удобного импорта
 logger = setup_logger()
