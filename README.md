@@ -19,7 +19,7 @@ The system is built on **LangGraph** and consists of three specialized agents:
 ## 🚀 Tech Stack
 
 *   **Orchestration:** [LangGraph](https://langchain-ai.github.io/langgraph/) (Stateful Multi-Agent Workflow)
-*   **LLM Inference:** Local [vLLM](https://github.com/vllm-project/vllm) / Qwen 2.5 (OpenAI-compatible API)
+*   **LLM Inference:** Local [vLLM](https://github.com/vllm-project/vllm) / Qwen 3 235B (OpenAI-compatible API)
 *   **Chess Logic:** [python-chess](https://python-chess.readthedocs.io/)
 *   **Backend:** FastAPI + WebSockets (Real-time bi-directional communication)
 *   **Frontend:** HTML5 + Chessboard.js
@@ -52,7 +52,7 @@ Create a `.env` file:
 # Local vLLM or OpenAI Compatible Endpoint
 LLM_BASE_URL="http://localhost:8000/v1"
 LLM_API_KEY="sk-fake-key-for-local"
-LLM_MODEL="Qwen/Qwen2.5-Coder-32B-Instruct"
+LLM_MODEL="Qwen/Qwen3-235B-A22B-Instruct-2507-FP8"
 ```
 
 ### 5. Run the Server
