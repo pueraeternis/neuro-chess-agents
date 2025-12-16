@@ -7,6 +7,7 @@ WORKDIR /app
 ENV UV_COMPILE_BYTECODE=0
 ENV UV_LINK_MODE=copy
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
 
 # 1. Сначала зависимости (слой кэшируется)
 COPY pyproject.toml uv.lock ./

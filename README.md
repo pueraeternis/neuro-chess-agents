@@ -98,5 +98,3 @@ This implementation is guided by recent findings in LLM game theory:
 *   *Zhang et al. (2025)*: "Complete Chess Games Enable LLM Become A Chess Master" — implemented **FEN-based state injection** and **Pass@N sampling**.
 *   *PatientZero (2024)*: "Why LLMs play chess so poorly" — implemented **Stateless interaction** to avoid memory loss and hallucinations.
 
----
-*Built by [pueraeternis](https://github.com/pueraeternis)*
