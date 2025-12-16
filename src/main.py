@@ -11,8 +11,6 @@ from src.config import (
     INDEX_HTML_PATH,
     STATIC_DIR,
     STATIC_URL_PREFIX,
-    UVICORN_HOST,
-    UVICORN_PORT,
 )
 from src.logger import logger
 
@@ -92,9 +90,3 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.info("Client disconnected")
     except Exception as e:
         logger.error(f"Error: {e}")
-
-
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run(app, host=UVICORN_HOST, port=UVICORN_PORT)

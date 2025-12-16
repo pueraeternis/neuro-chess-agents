@@ -1,7 +1,8 @@
 import json
 import os
+import random
 import re
-from typing import TypedDict
+from typing import Any, TypedDict, cast
 
 import chess
 from dotenv import load_dotenv
@@ -32,11 +33,10 @@ def get_llm(
     """
     return ChatOpenAI(
         base_url=os.getenv("LLM_BASE_URL"),
-        api_key=os.getenv("LLM_API_KEY"),
-        model=os.getenv("LLM_MODEL"),
+        api_key=cast("Any", os.getenv("LLM_API_KEY")),
+        model=os.getenv("LLM_MODEL") or "",
         temperature=temperature,
-        stop=LLM_STOP_TOKENS,
-        extra_body={"max_tokens": max_tokens},
+        extra_body={"max_tokens": max_tokens, "stop": LLM_STOP_TOKENS},
     )
 
 
@@ -109,7 +109,9 @@ def strategist_node(state: AgentState):
 
     try:
         response = llm_strategist.invoke(messages)
-        content = response.content.strip()
+        raw_content = response.content
+        # Fallback: convert non-string content (e.g. tool calls) into JSON text
+        content = raw_content.strip() if isinstance(raw_content, str) else json.dumps(raw_content, ensure_ascii=False)
 
         logger.info(f"🧠 STRATEGIST THOUGHTS:\n{content}")
 
@@ -221,13 +223,11 @@ workflow.add_edge("commentator", END)
 
 app_agent = workflow.compile()
 
-import random
-
 
 def get_agent_move(board: chess.Board):
     legal_moves = [m.uci() for m in board.legal_moves]
 
-    initial_state = {
+    initial_state: AgentState = {
         "fen": board.fen(),
         "legal_moves_uci": legal_moves,
         "history_pgn": "",
@@ -239,7 +239,7 @@ def get_agent_move(board: chess.Board):
         "thought_process": "",
     }
 
-    result = app_agent.invoke(initial_state)
+    result = app_agent.invoke(cast("AgentState", initial_state))
 
     move_uci = result.get("final_move_uci")
     commentary = result.get("commentary", "")

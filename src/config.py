@@ -1,12 +1,5 @@
 from __future__ import annotations
 
-"""
-Project-wide configuration and constants.
-
-Keep this file lightweight: only shared, non-secret settings belong here.
-Environment-specific or secret values should stay in environment variables.
-"""
-
 import logging
 from pathlib import Path
 
@@ -19,12 +12,6 @@ APP_TITLE = "Neuro-Chess Agents"
 STATIC_URL_PREFIX = "/static"
 STATIC_DIR = BASE_DIR / "static"
 INDEX_HTML_PATH = STATIC_DIR / "index.html"
-
-
-# --- Server configuration ---------------------------------------------------------
-
-UVICORN_HOST = "0.0.0.0"
-UVICORN_PORT = 8000
 
 
 # --- Logging configuration --------------------------------------------------------

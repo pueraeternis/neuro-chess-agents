@@ -260,9 +260,6 @@
                 game.load(data.fen);
                 updateStatus();
 
-                // --- FIX: Анимация только для Агента ---
-                // Если FEN изменился по сравнению с тем, что мы знаем (значит, походил Агент),
-                // мы используем board.position() С АНИМАЦИЕЙ (по умолчанию true).
                 if (data.fen !== currentFen) {
                     board.position(data.fen);
                     currentFen = data.fen;
