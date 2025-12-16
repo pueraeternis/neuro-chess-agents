@@ -1,0 +1,10 @@
+services:
+  neuro-chess:
+    build: .
+    container_name: neuro_chess_agent
+    ports:
+      - "8000:8000"
+    # Docker сам прочитает файл .env и передаст переменные внутрь
+    env_file:
+      - .env
+    restart: unless-stopped

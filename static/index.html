@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Neuro-Chess Agent</title>
+    <!-- CSS for Chessboard.js -->
+    <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css"
+        integrity="sha384-q94+BZtLrkL1/ohfjR8c6L+A6qzNH9R2hBLwyoAfu3i/WCvQjzL2RQJ3uNHDISdU" crossorigin="anonymous">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: #202020;
+            color: #ddd;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            margin-bottom: 10px;
+        }
+
+        #board {
+            width: 600px;
+            margin-top: 20px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+
+        #status {
+            margin-top: 15px;
+            font-size: 1.2em;
+            color: #aaa;
+            font-weight: bold;
+        }
+
+        .log-container {
+            width: 600px;
+            margin-top: 20px;
+            border: 1px solid #444;
+            border-radius: 4px;
+            background: #333;
+        }
+
+        .log-header {
+            padding: 5px 10px;
+            background: #444;
+            border-bottom: 1px solid #555;
+            font-size: 0.9em;
+            color: #fff;
+        }
+
+        .log {
+            height: 150px;
+            overflow-y: scroll;
+            padding: 10px;
+            font-family: monospace;
+            color: #0f0;
+            font-size: 0.9em;
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+            border-bottom: 1px solid #3a3a3a;
+        }
+
+        .log-entry.agent {
+            color: #5bc0de;
+        }
+
+        .log-entry.error {
+            color: #d9534f;
+        }
+
+        /* --- STYLES FOR PROMOTION MODAL --- */
+        #promotion-dialog {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 1000;
+            display: flex;
+            /* Hidden by default via JS */
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            display: none;
+        }
+
+        .promotion-content {
+            background: #333;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid #555;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.8);
+        }
+
+        .promotion-content h3 {
+            margin-top: 0;
+            color: #fff;
+        }
+
+        .promo-options {
+            display: flex;
+            gap: 15px;
+        }
+
+        .promo-piece {
+            width: 60px;
+            height: 60px;
+            cursor: pointer;
+            transition: transform 0.2s, background 0.2s;
+            background: #444;
+            border-radius: 50%;
+            padding: 5px;
+        }
+
+        .promo-piece:hover {
+            transform: scale(1.1);
+            background: #666;
+            border: 2px solid #aaa;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>♟️ Neuro-Chess Agent</h1>
+    <div id="status">Connecting to server...</div>
+    <div id="board"></div>
+
+    <div class="log-container">
+        <div class="log-header">System Logs</div>
+        <div class="log" id="game-log"></div>
+    </div>
+
+    <!-- PROMOTION DIALOG -->
+    <div id="promotion-dialog">
+        <div class="promotion-content">
+            <h3>Choose Promotion</h3>
+            <div class="promo-options">
+                <!-- Картинки подгрузятся скриптом -->
+                <img src="/static/img/chesspieces/wikipedia/wQ.png" data-piece="q" class="promo-piece" title="Queen">
+                <img src="/static/img/chesspieces/wikipedia/wR.png" data-piece="r" class="promo-piece" title="Rook">
+                <img src="/static/img/chesspieces/wikipedia/wB.png" data-piece="b" class="promo-piece" title="Bishop">
+                <img src="/static/img/chesspieces/wikipedia/wN.png" data-piece="n" class="promo-piece" title="Knight">
+            </div>
+        </div>
+    </div>
+
+    <!-- Dependencies -->
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+
+    <script>
+        var game = new Chess();
+        var board = null;
+        var socket = new WebSocket("ws://" + window.location.host + "/ws");
+        var $status = $('#status');
+        var $log = $('#game-log');
+
+        var pendingPromotionMove = null;
+        // Храним текущий FEN, чтобы понимать, изменилась ли позиция
+        var currentFen = 'start';
+
+        function log(msg, type = 'info') {
+            var className = 'log-entry';
+            if (type === 'agent') className += ' agent';
+            if (type === 'error') className += ' error';
+            $log.append('<div class="' + className + '">> ' + msg + '</div>');
+            $log.scrollTop($log[0].scrollHeight);
+        }
+
+        function onDragStart(source, piece, position, orientation) {
+            if (game.game_over()) return false;
+            // Разрешаем брать только фигуры своего цвета (сейчас захардкожено: игрок - белый)
+            if (piece.search(/^b/) !== -1) return false;
+        }
+
+        function onDrop(source, target) {
+            // --- Smart Castling (Рокировка перетаскиванием на ладью) ---
+            var piece = game.get(source);
+            if (piece && piece.type === 'k') {
+                if (source === 'e1' && target === 'h1') target = 'g1';
+                if (source === 'e1' && target === 'a1') target = 'c1';
+                if (source === 'e8' && target === 'h8') target = 'g8';
+                if (source === 'e8' && target === 'a8') target = 'c8';
+            }
+            // -----------------------------------------------------------
+
+            // Проверка на превращение пешки
+            var moves = game.moves({ verbose: true });
+            var move = moves.find(m => m.from === source && m.to === target);
+
+            if (!move) return 'snapback';
+
+            // Если это превращение
+            if (move.flags.includes('p') || (game.get(source).type === 'p' && target[1] === '8')) {
+                pendingPromotionMove = { source: source, target: target };
+                $('#promotion-dialog').css('display', 'flex');
+                return 'snapback';
+            }
+
+            // Обычный ход
+            makeMove(source, target);
+
+            // ВАЖНО: Мы не возвращаем 'snapback' здесь, позволяя chessboard.js
+            // визуально завершить перетаскивание.
+        }
+
+        function makeMove(source, target, promotionPiece = null) {
+            var moveCfg = {
+                from: source,
+                to: target,
+                promotion: promotionPiece || 'q'
+            };
+
+            var move = game.move(moveCfg);
+
+            if (move) {
+                // --- FIX: Убираем "двойной ход" ---
+                // Обновляем позицию визуальной доски МГНОВЕННО (false), без анимации.
+                // Это нужно, чтобы синхронизировать состояние (например, переместить ладью при рокировке),
+                // но не переигрывать анимацию твоей фигуры.
+                board.position(game.fen(), false);
+
+                currentFen = game.fen();
+
+                var uciMove = move.from + move.to;
+                if (move.promotion) uciMove += move.promotion;
+
+                log("Player: " + uciMove);
+                socket.send(JSON.stringify({
+                    "action": "human_move",
+                    "move_uci": uciMove
+                }));
+
+                updateStatus();
+            }
+        }
+
+        $('.promo-piece').on('click', function () {
+            var pieceType = $(this).data('piece');
+            $('#promotion-dialog').hide();
+            if (pendingPromotionMove) {
+                makeMove(pendingPromotionMove.source, pendingPromotionMove.target, pieceType);
+                pendingPromotionMove = null;
+            }
+        });
+
+        function updateStatus() {
+            var status = '';
+            var moveColor = 'White';
+            if (game.turn() === 'b') { moveColor = 'Black'; }
+
+            if (game.in_checkmate()) { status = 'Game over, ' + moveColor + ' is in checkmate.'; }
+            else if (game.in_draw()) { status = 'Game over, drawn position'; }
+            else { status = moveColor + ' to move'; if (game.in_check()) { status += ', ' + moveColor + ' is in check'; } }
+            $status.html(status);
+        }
+
+        socket.onopen = function () {
+            log("Connected to Neuro-Chess Server");
+            $status.html("Connected. You play White.");
+        };
+
+        socket.onmessage = function (event) {
+            var data = JSON.parse(event.data);
+
+            if (data.action === "update_board") {
+                game.load(data.fen);
+                updateStatus();
+
+                // --- FIX: Анимация только для Агента ---
+                // Если FEN изменился по сравнению с тем, что мы знаем (значит, походил Агент),
+                // мы используем board.position() С АНИМАЦИЕЙ (по умолчанию true).
+                if (data.fen !== currentFen) {
+                    board.position(data.fen);
+                    currentFen = data.fen;
+                }
+
+                if (data.last_move) {
+                    log("Agent: " + data.last_move, "agent");
+                }
+                if (data.commentary) {
+                    log("💬 " + data.commentary, "agent");
+                }
+            }
+        };
+
+        var config = {
+            draggable: true,
+            position: 'start',
+            onDragStart: onDragStart,
+            onDrop: onDrop,
+            pieceTheme: '/static/img/chesspieces/wikipedia/{piece}.png',
+            // Скорость анимации (можно подкрутить)
+            moveSpeed: 'slow',
+            snapbackSpeed: 500,
+            snapSpeed: 100
+        };
+
+        board = Chessboard('board', config);
+        $(window).resize(board.resize);
+    </script>
+</body>
+
+</html>
