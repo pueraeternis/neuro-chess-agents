@@ -99,4 +99,4 @@ This implementation is guided by recent findings in LLM game theory:
 *   *PatientZero (2024)*: "Why LLMs play chess so poorly" — implemented **Stateless interaction** to avoid memory loss and hallucinations.
 
 ---
-*Built with ❤️ by [pueraeternis](https://github.com/pueraeternis)*
+*Built by [pueraeternis](https://github.com/pueraeternis)*
